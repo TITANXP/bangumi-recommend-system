@@ -9,16 +9,19 @@
     <version>1.0-SNAPSHOT</version>
 
     <properties>
-        <spark.version>2.1.1</spark.version>
+        <spark.version>2.4.3</spark.version>
         <scala.version>2.11.8</scala.version>
         <scala.tools.version>2.11</scala.tools.version>
         <scala.plugin.version>3.3.1</scala.plugin.version>
-        <mongodb-spark.version>2.0.0</mongodb-spark.version>
+        <mongodb-spark.version>2.4.2</mongodb-spark.version>
+        <mongodb.version>3.12.7</mongodb.version>
         <casbah.version>3.1.1</casbah.version>
         <elasticsearch-spark.version>7.6.2</elasticsearch-spark.version>
         <elasticsearch.version>7.6.2</elasticsearch.version>
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
+        <httpclient.version>4.5.8</httpclient.version>
+        <httpasyncclient.version>4.1.4</httpasyncclient.version>
     </properties>
 
     <dependencies>
@@ -131,6 +134,11 @@
         <!-- 加入MongoDB的驱动 -->
         <dependency>
             <groupId>org.mongodb</groupId>
+            <artifactId>mongo-java-driver</artifactId>
+            <version>${mongodb.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.mongodb</groupId>
             <artifactId>casbah-core_2.11</artifactId>
             <version>${casbah.version}</version>
         </dependency>
@@ -139,6 +147,62 @@
             <artifactId>mongo-spark-connector_2.11</artifactId>
             <version>${mongodb-spark.version}</version>
         </dependency>
+
+        <!-- ElasticSearch -->
+        <dependency>
+            <groupId>org.elasticsearch.client</groupId>
+            <artifactId>elasticsearch-rest-high-level-client</artifactId>
+            <version>${elasticsearch.version}</version>
+        </dependency>
+
+        <!-- http client -->
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpclient</artifactId>
+            <version>${httpclient.version}</version>
+            <exclusions>
+                <exclusion>
+                    <artifactId>commons-logging</artifactId>
+                    <groupId>commons-logging</groupId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>fluent-hc</artifactId>
+            <version>${httpclient.version}</version>
+            <exclusions>
+                <exclusion>
+                    <artifactId>commons-logging</artifactId>
+                    <groupId>commons-logging</groupId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpmime</artifactId>
+            <version>${httpclient.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpasyncclient</artifactId>
+            <version>${httpasyncclient.version}</version> <!-- 4.0.2 --> <!-- 4.1-beta1 -->
+            <exclusions>
+                <exclusion>
+                    <artifactId>commons-logging</artifactId>
+                    <groupId>commons-logging</groupId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>org.json</groupId>
+            <artifactId>json</artifactId>
+            <version>20200518</version>
+        </dependency>
+
+
 
     </dependencies>
 
