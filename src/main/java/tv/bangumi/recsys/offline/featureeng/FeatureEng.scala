@@ -26,12 +26,15 @@ object FeatureEng {
   val NUM_PRECISION = 2;
 
   def main(args: Array[String]): Unit = {
-    val sparkConf = new SparkConf().setMaster("local[*]").setAppName("featureEng")
-      .set("spark.sql.caseSensitive", "true") //设置spark解析查询区分大小写，否则读取mongoDB数据时会报错
+    val sparkConf = new SparkConf()
+      .setMaster("local[*]")
+      .setAppName("featureEng")
+      .set("spark.local.dir","D:/SparkTemp") // 中间结果的保存路径，默认C盘，可能会报错磁盘空间不足
+    .set("spark.sql.caseSensitive", "true") //设置spark解析查询区分大小写，否则读取mongoDB数据时会报错
     val spark = SparkSession.builder().config(sparkConf).getOrCreate()
     spark.sparkContext.setLogLevel("WARN")
-//    val redisClient = new Jedis("localhost", 6379)
-//    tagEng(spark, redisClient)
+    val redisClient = new Jedis("localhost", 6379)
+    tagEng(spark, redisClient)
 
     // 从MongoDB读取数据
     // 动画
@@ -42,24 +45,32 @@ object FeatureEng {
       .load()
       .select("id", "tags", "score", "votes", "上映年度")
       .withColumn("animeId", col("id"))
-      .drop("id")
+      .withColumn("releaseYear", col("上映年度"))
+      .drop("id", "上映年度")
+      .repartition(1)
     // 评分
     val ratingSamples = spark.read
       .option("uri", "mongodb://localhost:27017/bangumi_test")
-      .option("collection", "user_collect")
+      .option("collection", "user1")
       .format("com.mongodb.spark.sql")
+      .option("cursorTimeoutMillis", 6000000 )
       .load()
+      .withColumn("userTags", col("tags"))
+      .drop("api", "_id", "tags")
+      .repartition(1)
+
 
     println("从MongoDB读取的评分数据")
     ratingSamples.printSchema()
     ratingSamples.show(10, truncate = false)
+//    // 计算label
     val ratingSamplesWithLabel = addSampleLabel(ratingSamples)
     val ratingWithAnimeFeatures = addAnimeFeatures(animeSamples, ratingSamplesWithLabel)
     val sampleWithUserFeatures = addUserFeatures(ratingWithAnimeFeatures)
     splitAndSaveSamplesByTimestamp(sampleWithUserFeatures, "D:\\IDEA\\bangumi-recommend-system\\src\\main\\resources\\sampledata")
     extractAndSaveAnimeFeaturesToRedis(sampleWithUserFeatures)
     extractAndSaveUserFeaturesToRedis(sampleWithUserFeatures)
-//    redisClient.close()
+    redisClient.close()
     spark.close()
   }
 
@@ -103,12 +114,12 @@ object FeatureEng {
    */
   def addSampleLabel(ratingSamples: DataFrame):DataFrame = {
     val ratingSamples1 =  ratingSamples
-      .withColumn("ratingTuple", explode(col("ratings"))) // 行转列
+      .withColumn("ratingTuple", explode(col("collects"))) // 行转列
       .withColumn("userId", col("user_id"))
       .withColumn("animeId", col("ratingTuple").getItem(0))
       .withColumn("rating", col("ratingTuple").getItem(1).cast(IntegerType))
       .withColumn("timestamp", col("ratingTuple").getItem(2))
-      .drop("_id", "ratings", "ratingTuple","user_id")
+      .drop("_id", "collects", "ratingTuple","user_id")
     // 统计各个评分人数所占百分比
     val sampleCount = ratingSamples1.count()
     println("各评分所占百分比")
@@ -117,7 +128,11 @@ object FeatureEng {
       .withColumn("percentage", col("count")/sampleCount)
       .show()
     // 添加lable列，表示用户是否喜欢此item
-    val ratingSamplesWithLabel = ratingSamples1.withColumn("label", when(col("rating") >= 7, 1).otherwise(0))
+    val ratingSamplesWithLabel = ratingSamples1.withColumn(
+      "label",
+      when((col("rating") >= 6 || col("rating") === 0), 1)
+        .otherwise(0)
+    )
     println("添加label列后的评分数据")
     ratingSamplesWithLabel.printSchema()
     ratingSamplesWithLabel.show(10, truncate=false)
@@ -131,8 +146,8 @@ object FeatureEng {
    * @return
    */
   def addAnimeFeatures(animeSamples: DataFrame, ratingSample: DataFrame): DataFrame = {
-    // 将评分数据 和 动画数据进行left join
-    val sampleWithAnime1 = ratingSample.join(animeSamples, Seq("animeId"), joinType = "left")
+    // 将评分数据 和 动画数据进行 join
+    val sampleWithAnime1 = ratingSample.join(animeSamples, Seq("animeId"), joinType = "inner")
     val sampleWithAnime2 = sampleWithAnime1
       // 动画标签
       .withColumn("tags", sortTags(col("tags")))
@@ -178,7 +193,7 @@ object FeatureEng {
       .withColumn("userRatedAnime5", col("userPositiveHistory").getItem(4))
       // 用户评分总数
       .withColumn("userRatingCount", count(lit(1))
-        .over(Window.partitionBy("userId").orderBy("timestamp").rowsBetween(-100, -1)))
+        .over(Window.partitionBy("userId").orderBy("timestamp")))
       // TODO: 用户好评动画的开播年份均值
 //      .withColumn("userAvgReleaseYear", avg("releaseYear")
 //        .over(Window.partitionBy("userId").orderBy("timestamp").rowsBetween(-100, -1)))
@@ -187,22 +202,22 @@ object FeatureEng {
 //        .over(Window.partitionBy("userId").orderBy("timestamp").rowsBetween(-100, -1)))
       // 用户平均评分
       .withColumn("userAvgRating", format_number(avg("rating")
-        .over(Window.partitionBy("userId").orderBy("timestamp").rowsBetween(-100, -1)), NUM_PRECISION))
+        .over(Window.partitionBy("userId").orderBy("timestamp")), NUM_PRECISION))
       // 用户评分标准差
       .withColumn("userRatingStddev", stddev("rating")
-        .over(Window.partitionBy("userId").orderBy("timestamp").rowsBetween(-100, -1)))
+        .over(Window.partitionBy("userId").orderBy("timestamp")))
       .na.fill(0)
       //      .withColumn("userReleaseYeadStddev", format_number(col("userReleaseYeadStddev"), NUM_PRECISION))
       .withColumn("userRatingStddev", format_number(col("userRatingStddev"), NUM_PRECISION))
-      // TODO: 修改为爬取的用户标签
-      .withColumn("userTags", extractTags(collect_list(when(col("label") === 1, col("tags")).otherwise(lit(null)))
-        .over(Window.partitionBy("userId").orderBy("timestamp").rowsBetween(-100, -1))))
+//      // TODO: 修改为爬取的用户标签
+//      .withColumn("userTags", extractTags(collect_list(when(col("label") === 1, col("tags")).otherwise(lit(null)))
+//        .over(Window.partitionBy("userId").orderBy("timestamp").rowsBetween(-100, -1))))
       // 用户喜欢的动画标签
-      .withColumn("userTag1", col("userTags").getItem(0))
-      .withColumn("userTag2", col("userTags").getItem(1))
-      .withColumn("userTag3", col("userTags").getItem(2))
-      .withColumn("userTag4", col("userTags").getItem(3))
-      .withColumn("userTag5", col("userTags").getItem(4))
+      .withColumn("userTag1", col("userTags").getItem(0).getItem("name"))
+      .withColumn("userTag2", col("userTags").getItem(1).getItem("name"))
+      .withColumn("userTag3", col("userTags").getItem(2).getItem("name"))
+      .withColumn("userTag4", col("userTags").getItem(3).getItem("name"))
+      .withColumn("userTag5", col("userTags").getItem(4).getItem("name"))
       .drop("tags", "userTags", "userPositiveHistory")
       .filter(col("userRatingCount") > 1)
 
