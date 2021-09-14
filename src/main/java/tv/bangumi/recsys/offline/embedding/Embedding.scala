@@ -15,10 +15,10 @@ object Embedding {
     // 从MongoDB读取数据
     val sparkConf = new SparkConf().setMaster("local[*]").setAppName("embedding")
     val spark = SparkSession.builder().config(sparkConf).getOrCreate()
-    val mongoConf = MongoConf("mongodb://localhost:27017/bangumi", "user_collect")
+    val mongoConf = MongoConf("mongodb://localhost:27017/bangumi_test", "user1")
     val samples = processItemSequence(spark, mongoConf)
-    val model = trainItem2Vec(spark, samples, 10)
-    genUserEmb(spark, model, mongoConf, 10)
+    val model = trainItem2Vec(spark, samples, 20)
+    genUserEmb(spark, model, mongoConf, 20)
     embeddingLSH(spark, model.getVectors)
     spark.close()
 
@@ -29,10 +29,10 @@ object Embedding {
     //读取用户“看过”序列
     val userSeq = spark.read
       .option("uri", mongoConf.url)
-      .option("collection", "user_collect")
+      .option("collection", mongoConf.collection)
       .format("com.mongodb.spark.sql")
       .load()
-      .map(row => (row.getAs[String](1), row.getAs[Seq[Seq[String]]](2)))
+      .map(row => (row.getAs[Integer]("user_id"), row.getAs[Seq[Seq[String]]]("collects")))
       // 根据日期对观看序列排序
       .map(row => (row._1, row._2.sortBy(_(1)).reverse))
       .map(row => (row._1, row._2.map(_(0))))
@@ -73,35 +73,38 @@ object Embedding {
    * @param embLength
    */
   def genUserEmb(spark: SparkSession, model: Word2VecModel, mongoConf: MongoConf, embLength: Int): Unit = {
-    val userEmbeddings = new ArrayBuffer[(String, Array[Float])]()
+    val userEmbeddings = new ArrayBuffer[(Integer, Array[Float])]()
     import spark.implicits._
     //读取用户“看过”序列
     val userSeq = spark.read
       .option("uri", mongoConf.url)
-      .option("collection", "user_collect")
+      .option("collection", mongoConf.collection)
       .format("com.mongodb.spark.sql")
       .load()
-      .map(row => (row.getAs[String](1), row.getAs[Seq[Seq[String]]](2)))
+      .map(row => (row.getAs[Integer]("user_id"), row.getAs[Seq[Seq[String]]]("collects")))
       // 根据日期对观看序列排序
-      .map(row => (row._1, row._2.sortBy(_(1)).reverse))
+      .map(row => (row._1, row._2.sortBy(_(2)).reverse))
       // 去掉时间戳
       .map(row => (row._1, row._2.map(_(0))))
 
     userSeq.collect()
       .foreach(user => {
-        val userId: String = user._1
+        val userId: Integer = user._1
         val movies: Seq[String] = user._2
         var userEmb = new Array[Float](embLength)
 
+        var movieCount = 0
         userEmb = movies.foldRight[Array[Float]](userEmb)((movieId, emb) => {
           val movieEmb = model.getVectors.get(movieId)
+          movieCount += 1
           if(movieEmb.isDefined){
             emb.zip(movieEmb.get).map{case(x, y) => x + y}
           }else{
             emb
           }
-        })
-        userEmbeddings.append((userId, userEmb))
+        }).map((x: Float) => x / movieCount)
+        // 去掉收藏数为0的用户
+        if(movieCount > 0) {userEmbeddings.append((userId, userEmb))}
       })
 
     // 写入文件
@@ -139,10 +142,10 @@ object Embedding {
     embBucketResult.show(10, truncate=false)
 
     // 对一个示例embedding查找最近邻
-    val sampleEmb = Vectors.dense(0.795,0.583,1.120,0.850,0.174,-0.839,-0.0633,0.249,0.673,-0.237)
-    bucketModel.approxNearestNeighbors(embDF, sampleEmb, 5).show(truncate=false)
+//    val sampleEmb = Vectors.dense(0.795,0.583,1.120,0.850,0.174,-0.839,-0.0633,0.249,0.673,-0.237)
+//    bucketModel.approxNearestNeighbors(embDF, sampleEmb, 5).show(truncate=false)
 
   }
 }
 
-case class MongoConf(url: String, db: String)
+case class MongoConf(url: String, collection: String)
