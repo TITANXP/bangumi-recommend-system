@@ -54,25 +54,25 @@
 
 ## 3.1 爬虫
 
-**开发环境：**PyCharm
+**开发环境**：PyCharm
 
-**技术架构：**Python、Scrapy、MongoDB
+**技术架构**：Python、Scrapy、MongoDB
 
 **介绍**：使用Scrapy实现，抓取动画和用户的基础信息、网站的所有动画标签信息，实时监控并抓取用户与动画的交互信息；
 
 ## 3.2 数据处理
 
-**开发环境：**PyCharm
+**开发环境**：PyCharm
 
-**技术架构：**Python、Numpy、Pandas
+**技术架构**：Python、Numpy、Pandas
 
-**介绍：**使用Pandas和Numpy对抓取的数据进行处理，生成推荐模型训练样本数据和测试样本数据到CSV文件，生成用户和动画的特征到Redis，根据最新的用户与动画交互信息更新用户特征向量，从而保证推荐系统的实时性；
+**介绍**：使用Pandas和Numpy对抓取的数据进行处理，生成推荐模型训练样本数据和测试样本数据到CSV文件，生成用户和动画的特征到Redis，根据最新的用户与动画交互信息更新用户特征向量，从而保证推荐系统的实时性；
 
 ## 3.3 推荐模型
 
-**开发环境：**PyCharm
+**开发环境**：PyCharm
 
-**技术架构：**Python、TensorFlow2、TensorFlow Serving、Gensim
+**技术架构**：Python、TensorFlow2、TensorFlow Serving、Gensim
 
 ### 召回层：
 
@@ -106,19 +106,19 @@
 
 ## 3.4.后台部分 
 
-**开发环境：**IDEA、Postman
+**开发环境**：IDEA、Postman
 
-**技术架构：**Java、Jetty、Servlet、Redis、ElasticSearch
+**技术架构**：Java、Jetty、Servlet、Redis、ElasticSearch
 
-**介绍：**提供用户和动画数据的查询功能，动画的搜索功能，负责协调数据部分、推荐模型和前端，制定推荐策略、冷启动策略。
+**介绍**：提供用户和动画数据的查询功能，动画的搜索功能，负责协调数据部分、推荐模型和前端，制定推荐策略、冷启动策略。
 
 ## 3.5 前端部分 
 
-**开发环境：**VSCode、Nodejs
+**开发环境**：VSCode、Nodejs
 
-**技术架构：**React、Metrial-UI
+**技术架构**：React、Material-UI、Ant Design Charts、Fetch
 
-**介绍：**使用React实现，主页展示对用户的个性化推荐、动画详情页展示动画详细信息以及相似动画推荐、个人中心页展示个人信息以及相似用户、搜索页可对动画进行搜索。
+**介绍**：使用React实现，主页展示对用户的个性化推荐、动画详情页展示动画详细信息以及相似动画推荐、个人中心页展示个人信息以及相似用户、搜索页可对动画进行搜索。
 
 
 
@@ -127,7 +127,7 @@
 
 
 
-## 爬虫
+## 4.1 爬虫
 
 1. 启动MongoDB
 
@@ -173,7 +173,7 @@
 
 
 
-## 推荐模型
+## 4.2 推荐模型
 1. 特征工程，生成训练集、测试集到CSV文件，生成用户特征、动画特征到Redis
 	```sh
 	FeatureEng.py
@@ -208,11 +208,11 @@
     docker run -t --rm -p 8501:8501 -v "D:\IDEA\bangumi-recommend-system\src\main\resources\model\neuralcf:/models/recmodel" -e MODEL_NAME=recmodel tensorflow/serving
     ```
 
-## 后台
+## 4.3 后台
 
 运行RecSysServer
 
-## 前端
+## 4.4 前端
 
 1. 修改镜像
 	```sh
